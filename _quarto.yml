@@ -1,0 +1,15 @@
+project:
+  type: website
+  output-dir: docs    # GitHub Pages looks in the /docs folder
+
+website:
+  title: "Mini-project: Interactive Analysis"
+  navbar:
+    left:
+      - href: diffusion.qmd
+        text: Diffusion
+
+format:
+  html:
+    theme: cosmo
+    self-contained: true  # Keeps dependencies bundled

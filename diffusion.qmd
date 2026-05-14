@@ -1,0 +1,4 @@
+### Compare 3D structures
+
+# Using an iframe to embed the local HTML file
+<iframe src="diffusion/baseline_benchmarking/3D_structure_compare_full_training.html" width="100%" height="600px" style="border:none;"></iframe>
