@@ -6,8 +6,10 @@ website:
   title: "Mini-project: Interactive Analysis"
   navbar:
     left:
-      - href: diffusion.qmd
-        text: Diffusion
+      - href: 3dstructures.qmd
+        text: 3D Structures
+      - href: structural_metrics.qmd
+        text: Structural Metrics
 
 format:
   html:
