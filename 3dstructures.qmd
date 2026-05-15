@@ -1,5 +1,8 @@
 ---
 title: 3D structures
+format:
+  html:
+    page-layout: full
 execute:
   echo: false
 jupyter: python3
@@ -10,97 +13,97 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import pickle
 
-def compare_gt_gen_grid(densities, temperatures, gt_positions_bonds_list, gen_positions_bonds_list):
-    # Plot GT and generated structures side by side in a grid
-    rows, cols = len(densities), 2*len(temperatures)
-
-    fig = make_subplots(rows=rows, cols=cols, 
-                        specs=[[{'type': 'scene'}]*cols]*rows,
-                        subplot_titles=[f"D={d}, T={t} (GT)" if j%2==0 else f"D={d}, T={t} (Gen)" for d in densities for t in temperatures for j in range(2)],
-                        horizontal_spacing=0.02, vertical_spacing=0.05)
-    for i, (gt_pos_bonds, gen_pos_bonds) in enumerate(zip(gt_positions_bonds_list, gen_positions_bonds_list)):
-        gt_positions, gt_bond_coords = gt_pos_bonds
-        gen_positions, gen_bond_coords = gen_pos_bonds
-        
-        row = i // len(temperatures) + 1
-        col_gt = (i % len(temperatures)) * 2 + 1
-        col_gen = col_gt + 1
-        
-        # Add GT scatter for atoms
-        fig.add_trace(
-            go.Scatter3d(
-                x=gt_positions[:, 0], 
-                y=gt_positions[:, 1], 
-                z=gt_positions[:, 2], 
-                mode='markers',
-                marker=dict(size=2, color='blue', opacity=0.2),
-                name='GT Atoms'
-            ),
-            row=row, col=col_gt
-        )
-    
-        # Add GT lines for bonds
-        fig.add_trace(
-            go.Scatter3d(
-                x=gt_bond_coords[:, 0],
-                y=gt_bond_coords[:, 1],
-                z=gt_bond_coords[:, 2],
-                mode='lines',
-                line=dict(color='red', width=1),
-                name='GT Bonds'
-            ),
-            row=row, col=col_gt
-        )
-
-        # Add Gen scatter for atoms
-        fig.add_trace(
-            go.Scatter3d(
-                x=gen_positions[:, 0], 
-                y=gen_positions[:, 1], 
-                z=gen_positions[:, 2], 
-                mode='markers',
-                marker=dict(size=2, color='green', opacity=0.2),
-                name='Gen Atoms'
-            ),
-            row=row, col=col_gen
-        )
-    
-        # Add Gen lines for bonds
-        fig.add_trace(
-            go.Scatter3d(
-                x=gen_bond_coords[:, 0],
-                y=gen_bond_coords[:, 1],
-                z=gen_bond_coords[:, 2],
-                mode='lines',
-                line=dict(color='orange', width=1),
-                name='Gen Bonds'
-            ),
-            row=row, col=col_gen
-        )
-    fig.update_layout(
-        height=400*rows, 
-        width=400*cols, 
-        showlegend=False
-    )
-    fig.show()
-
 # Read data from pickle and visualize
-pickle_path = 'diffusion/baseline_benchmarking/positions_bonds_data.pkl'
+pickle_path = 'diffusion/baseline_benchmarking/positions_bonds_data_small.pkl'
 
 with open(pickle_path, 'rb') as f:
     data = pickle.load(f)
-    gt_positions_bonds = data['gt']
-    gen_positions_bonds_full = data['gen_full']
-    gen_positions_bonds_subset = data['gen_subset']
+    gt_data = data['gt']
+    gen_full = data['gen_full']
+    gen_subset = data['gen_subset']
     densities = data['densities']
     temperatures = data['temperatures']
-```
-### Full training
-```{python}
-compare_gt_gen_grid(densities, temperatures, gt_positions_bonds, gen_positions_bonds_full)
-```
 
-### Subset training
-```{python}
-compare_gt_gen_grid(densities, temperatures, gt_positions_bonds, gen_positions_bonds_subset)
+# Create a 1x3 grid for side-by-side comparison
+fig = make_subplots(
+    rows=1, cols=3,
+    specs=[[{'type': 'scene'}, {'type': 'scene'}, {'type': 'scene'}]],
+    subplot_titles=("Ground Truth", "Generated (Full)", "Generated (Subset)"),
+    horizontal_spacing=0.01
+)
+
+num_d = len(densities)
+num_t = len(temperatures)
+traces_per_config = 6 # (Atoms + Bonds) * 3 subplots
+
+# Add all traces to the figure
+for d_idx in range(num_d):
+    for t_idx in range(num_t):
+        data_idx = d_idx * num_t + t_idx
+        groups = [gt_data[data_idx], gen_full[data_idx], gen_subset[data_idx]]
+        colors = [('blue', 'red'), ('green', 'orange'), ('purple', 'magenta')]
+        
+        for i, (pos_bonds, col_pair) in enumerate(zip(groups, colors)):
+            pos, bonds = pos_bonds
+            # Atoms
+            fig.add_trace(go.Scatter3d(
+                x=pos[:, 0], y=pos[:, 1], z=pos[:, 2],
+                mode='markers', marker=dict(size=1.5, color=col_pair[0], opacity=0.4),
+                visible=False
+            ), row=1, col=i+1)
+            # Bonds
+            fig.add_trace(go.Scatter3d(
+                x=bonds[:, 0], y=bonds[:, 1], z=bonds[:, 2],
+                mode='lines', line=dict(color=col_pair[1], width=1),
+                visible=False
+            ), row=1, col=i+1)
+
+# Set initial visibility (first density, first temperature)
+for i in range(traces_per_config):
+    fig.data[i].visible = True
+
+# Function to generate the visibility list for a specific (d, t) pair
+def get_visibility(d_idx, t_idx):
+    vis = [False] * len(fig.data)
+    start = (d_idx * num_t + t_idx) * traces_per_config
+    for i in range(traces_per_config):
+        vis[start + i] = True
+    return vis
+
+# Slider for Density
+density_steps = []
+for i, d in enumerate(densities):
+    step = dict(
+        method="update",
+        label=str(d),
+        args=[{"visible": get_visibility(i, 0)}, # Defaults to first temperature
+              {"title": f"Density: {d} | Temperature: {temperatures[0]}"}]
+    )
+    density_steps.append(step)
+
+# Slider for Temperature
+temp_steps = []
+for j, t in enumerate(temperatures):
+    step = dict(
+        method="update",
+        label=str(t),
+        args=[{"visible": get_visibility(0, j)}, # Defaults to first density
+              {"title": f"Density: {densities[0]} | Temperature: {t}"}]
+    )
+    temp_steps.append(step)
+
+fig.update_layout(
+    sliders=[
+        dict(active=0, pad={"t": 50}, currentvalue={"prefix": "Density: "}, steps=density_steps),
+        dict(active=0, pad={"t": 150}, currentvalue={"prefix": "Temperature: "}, steps=temp_steps)
+    ],
+    height=800,
+    margin=dict(l=0, r=0, b=0, t=50), # Remove internal margins
+    showlegend=False,
+    scene=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False),
+    scene2=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False),
+    scene3=dict(xaxis_visible=False, yaxis_visible=False, zaxis_visible=False),
+)
+
+fig.show()
 ```
